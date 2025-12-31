@@ -18,6 +18,7 @@ import time
 import threading
 import subprocess
 import contextlib
+from pathlib import Path
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import lru_cache
@@ -44,6 +45,80 @@ OPTION:
 '''
 
 VERSION = "1.2.4"
+
+
+# --- Platform-specific helpers
+def clear_screen():
+    """
+    Clears the terminal screen in a cross-platform way.
+    """
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+
+def reset_terminal():
+    """
+    Resets the terminal display in a cross-platform way.
+    On Windows, just clears the screen. On Unix, uses tput reset.
+    """
+    if os.name == 'nt':
+        os.system('cls')
+    else:
+        subprocess.call(['tput', 'reset'])
+
+
+def get_music_directory():
+    """
+    Gets the default Music directory in a cross-platform way.
+    
+    Returns:
+        str: Path to the Music directory.
+    """
+    if os.name == 'nt':
+        # Windows: Try multiple methods to find the Music folder
+        # Method 1: Try using Windows Registry via PowerShell
+        try:
+            result = subprocess.run(
+                ["powershell", "-Command",
+                 "[Environment]::GetFolderPath('MyMusic')"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=5
+            )
+            music_dir = result.stdout.strip()
+            if music_dir and os.path.isdir(music_dir):
+                return music_dir
+        except (subprocess.SubprocessError, subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+        
+        # Method 2: Fallback to default location
+        music_path = Path.home() / "Music"
+        if music_path.exists():
+            return str(music_path)
+        
+        # Method 3: Try OneDrive Music folder
+        onedrive_music = Path.home() / "OneDrive" / "Music"
+        if onedrive_music.exists():
+            return str(onedrive_music)
+        
+        # Final fallback
+        return str(music_path)
+    else:
+        # Linux/Unix: Use xdg-user-dir
+        try:
+            result = subprocess.run(
+                ["xdg-user-dir", "MUSIC"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=5
+            )
+            music_dir = result.stdout.decode("utf-8").strip()
+            if music_dir and os.path.isdir(music_dir):
+                return music_dir
+        except (subprocess.SubprocessError, subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+        # Fallback to ~/Music
+        return str(Path.home() / "Music")
 
 
 @dataclass
@@ -99,7 +174,7 @@ def exit_handler(signum, frame):
         frame (frame): The frame.
     """
     pygame.mixer.music.stop()
-    os.system("clear")
+    clear_screen()
     cursor.show()
     os._exit(0)
 
@@ -193,7 +268,7 @@ def redraw():
         return string
 
     if not UI.no_clear:
-        subprocess.call(['tput', 'reset'])
+        reset_terminal()
 
     cursor.hide()
 
@@ -292,7 +367,7 @@ def poll_interface(poll_interval):
     # Clear at the beginning if the redraws are set
     # to not clear each time. Else this is not needed.
     if UI.no_clear:
-        os.system("clear")
+        clear_screen()
 
     while True:
 
@@ -319,10 +394,7 @@ def strip_path_from_filename(path):
     Returns:
         str: The filename without the path.
     """
-    if "/" in path:
-        filename = path.split("/")[-1]
-        return filename
-    return path
+    return Path(path).name
 
 
 def strip_filename_from_path(path):
@@ -335,20 +407,19 @@ def strip_filename_from_path(path):
     Returns:
         str: The path without the filename.
     """
-    if "/" not in path:
+    parent = Path(path).parent
+    if not str(parent) or str(parent) == '.':
         return os.getcwd()
-    words = path.split("/")
-    words = words[:-1]
-    new_path = "/".join(words)
-    return new_path + "/"
+    return str(parent)
 
 
-def random_file(path):
+def random_file(path, allow_same=True):
     """
     Returns a random file from the given path.
 
     Args:
         path (str): The path to the directory to search.
+        allow_same (bool): Whether to allow returning the same file as input.
 
     Returns:
         str: A random file from the given path.
@@ -365,7 +436,9 @@ def random_file(path):
                    in files
                    if f.endswith(ext) and f != old_filename]
 
-    music_files += [old_filename] if len(music_files) == 0 else []
+    # Only add the old filename back if it was a valid music file and we allow it
+    if allow_same and old_filename.endswith(ext):
+        music_files += [old_filename] if len(music_files) == 0 else []
 
     try:
         # Get a random file from the directory (dont repeat the original file)
@@ -374,7 +447,7 @@ def random_file(path):
         raise pygame.error(f"No music files found in the directory.\n{esc}")
 
     # Return the path to the new random file
-    return os.path.join(stripped_path, r_file)
+    return str(Path(stripped_path) / r_file)
 
 
 # --- Keyboard handling functions
@@ -573,12 +646,7 @@ def main():
             print(VERSION)
             sys.exit(0)
 
-        music_dir = subprocess.run(
-            ["xdg-user-dir", "MUSIC"],
-            stdout=subprocess.PIPE
-        ).stdout.decode("utf-8").strip()
-
-        arg["path"] = os.path.expanduser(music_dir)
+        arg["path"] = get_music_directory()
 
     try:
         Files.m_file = arg["path"]
@@ -613,16 +681,20 @@ def main():
     # If the path is a folder, get a random file from it
     if os.path.isdir(Files.m_file):
         try:
-            Files.m_file = Files.m_file + \
-                "/" if Files.m_file[-1] != "/" else Files.m_file
-            Files.m_file = random_file(Files.m_file)
+            # Ensure path has trailing separator
+            path_obj = Path(Files.m_file)
+            # Add a dummy filename to make random_file work correctly
+            Files.m_file = str(path_obj / "dummy.mp3")
+            Files.m_file = random_file(Files.m_file, allow_same=False)
         except pygame.error:
-            print(f"Error: No music files found in '{Files.m_file}'.")
+            print(f"Error: No music files found in '{path_obj}'.")
             sys.exit(1)
 
     # Set up signal handlers
     signal.signal(signal.SIGINT, exit_handler)
-    signal.signal(signal.SIGWINCH, resize_handler)
+    # SIGWINCH is not available on Windows
+    if hasattr(signal, 'SIGWINCH'):
+        signal.signal(signal.SIGWINCH, resize_handler)
 
     # Initialize pygame mixer
     pygame.init()
