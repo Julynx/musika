@@ -1,5 +1,5 @@
 [project]
-name = "pyms"
+name = "musika"
 version = "1.2.4"
 description = "Minimal command-line music player written in Python"
 readme = "README.md"
@@ -16,8 +16,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Julynx/pyms"
-Repository = "https://github.com/Julynx/pyms"
+Homepage = "https://github.com/Julynx/musika"
+Repository = "https://github.com/Julynx/musika"
 
 [dependency-groups]
 dev = [

@@ -200,7 +200,7 @@ wheels = [
 ]
 
 [[package]]
-name = "pyms"
+name = "musika"
 version = "1.2.4"
 source = { virtual = "." }
 dependencies = [

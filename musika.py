@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 """
-@file       pyms
+@file       musika
 @date       03/08/2023
 @version    1.2.5
 @changelog  - .opus format support
 @license    GNU General Public License v2.0
-@url        github.com/Julynx/pyms
+@url        github.com/Julynx/musika
 @author     Julynx
 """
 
@@ -31,9 +31,9 @@ import mutagen
 
 HELP_MSG = """
 Usage:
-    pyms [OPTIONS]          Play a random song from '~/Music'.
-    pyms [FILE] [OPTIONS]   Play a specific song.
-    pyms [DIR.] [OPTIONS]   Play a random song from a directory.
+    musika [OPTIONS]          Play a random song from '~/Music'.
+    musika [FILE] [OPTIONS]   Play a specific song.
+    musika [DIR.] [OPTIONS]   Play a random song from a directory.
 
 OPTION:
     --update-interval=<X>   Redraw the UI every X seconds.

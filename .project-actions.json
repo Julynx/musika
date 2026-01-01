@@ -2,11 +2,11 @@
     "actions": [
         {
             "text": "$(sparkle) Lint",
-            "command": "uv run --dev -m pylint pyms.py; yina lint pyms.py"
+            "command": "uv run --dev -m pylint musika.py; yina lint musika.py"
         },
         {
             "text": "$(sparkle) Format",
-            "command": "uv run --dev -m black pyms.py"
+            "command": "uv run --dev -m black musika.py"
         },
         {
             "text": "$(arrow-up) Push",
