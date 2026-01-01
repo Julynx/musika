@@ -109,7 +109,7 @@ wheels = [
 
 [[package]]
 name = "musika"
-version = "1.2.5"
+version = "1.2.6"
 source = { virtual = "." }
 dependencies = [
     { name = "cursor" },
