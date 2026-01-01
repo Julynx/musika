@@ -1,0 +1,24 @@
+{
+    "actions": [
+        {
+            "text": "$(sparkle) Lint",
+            "command": "uv run --dev -m pylint pyms.py; yina lint pyms.py"
+        },
+        {
+            "text": "$(sparkle) Format",
+            "command": "uv run --dev -m black pyms.py"
+        },
+        {
+            "text": "$(arrow-up) Push",
+            "command": "git add . && git commit && git push"
+        },
+        {
+            "text": "$(gear) Bump",
+            "command": "uv version --bump patch"
+        },
+        {
+            "text": "$(rocket) Publish",
+            "command": "uv build; uv publish"
+        }
+    ]
+}

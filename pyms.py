@@ -24,11 +24,12 @@ from dataclasses import dataclass
 from functools import lru_cache
 import cursor
 from pynput import keyboard
+
 with contextlib.redirect_stdout(None):
     import pygame
 import mutagen
 
-HELP_MSG = '''
+HELP_MSG = """
 Usage:
     pyms [OPTIONS]          Play a random song from '~/Music'.
     pyms [FILE] [OPTIONS]   Play a specific song.
@@ -42,7 +43,7 @@ OPTION:
                               some terminals.
     -h, --help              Print this message and exit.
     -v, --version           Print version information and exit.
-'''
+"""
 
 VERSION = "1.2.4"
 
@@ -52,7 +53,7 @@ def clear_screen():
     """
     Clears the terminal screen in a cross-platform way.
     """
-    os.system('cls' if os.name == 'nt' else 'clear')
+    os.system("cls" if os.name == "nt" else "clear")
 
 
 def reset_terminal():
@@ -60,109 +61,124 @@ def reset_terminal():
     Resets the terminal display in a cross-platform way.
     On Windows, just clears the screen. On Unix, uses tput reset.
     """
-    if os.name == 'nt':
-        os.system('cls')
+    if os.name == "nt":
+        os.system("cls")
     else:
-        subprocess.call(['tput', 'reset'])
+        subprocess.call(["tput", "reset"])
 
 
 def get_music_directory():
     """
     Gets the default Music directory in a cross-platform way.
-    
+
     Returns:
         str: Path to the Music directory.
     """
-    if os.name == 'nt':
+    if os.name == "nt":
         # Windows: Try multiple methods to find the Music folder
         # Method 1: Try using Windows Registry via PowerShell
         try:
             result = subprocess.run(
-                ["powershell", "-Command",
-                 "[Environment]::GetFolderPath('MyMusic')"],
+                ["powershell", "-Command", "[Environment]::GetFolderPath('MyMusic')"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                timeout=5
+                timeout=5,
             )
             music_dir = result.stdout.strip()
             if music_dir and os.path.isdir(music_dir):
                 return music_dir
-        except (subprocess.SubprocessError, subprocess.TimeoutExpired, FileNotFoundError):
+        except (
+            subprocess.SubprocessError,
+            subprocess.TimeoutExpired,
+            FileNotFoundError,
+        ):
             pass
-        
+
         # Method 2: Fallback to default location
         music_path = Path.home() / "Music"
         if music_path.exists():
             return str(music_path)
-        
+
         # Method 3: Try OneDrive Music folder
         onedrive_music = Path.home() / "OneDrive" / "Music"
         if onedrive_music.exists():
             return str(onedrive_music)
-        
+
         # Final fallback
         return str(music_path)
-    else:
-        # Linux/Unix: Use xdg-user-dir
-        try:
-            result = subprocess.run(
-                ["xdg-user-dir", "MUSIC"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=5
-            )
-            music_dir = result.stdout.decode("utf-8").strip()
-            if music_dir and os.path.isdir(music_dir):
-                return music_dir
-        except (subprocess.SubprocessError, subprocess.TimeoutExpired, FileNotFoundError):
-            pass
-        # Fallback to ~/Music
-        return str(Path.home() / "Music")
+
+    # Linux/Unix: Use xdg-user-dir
+    try:
+        result = subprocess.run(
+            ["xdg-user-dir", "MUSIC"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=5,
+        )
+        music_dir = result.stdout.decode("utf-8").strip()
+        if music_dir and os.path.isdir(music_dir):
+            return music_dir
+    except (
+        subprocess.SubprocessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ):
+        pass
+    # Fallback to ~/Music
+    return str(Path.home() / "Music")
 
 
 @dataclass
 class Bindings:
+    """
+    Key bindings for the player.
+    """
     pause = keyboard.Key.f10
-    seekBwd = keyboard.Key.f8
-    seekFwd = keyboard.Key.f9
+    seek_bwd = keyboard.Key.f8
+    seek_fwd = keyboard.Key.f9
     next = keyboard.Key.f12
 
 
 @dataclass
-class UI:
+class UserInterface:
+    """
+    User Interface data.
+    """
     no_clear = False
     box_width = 46
-    playIdx = 6
+    play_index = 6
     file_pos = 0
 
-    box = [("----", False),
-           ("", True),
-           ("░"*box_width, True),
-           ("", True),
-           ("--:--", True),
-           ("", True),
-           ("██████    ██  ██    █  ▄██    ██▄  █    █ ▄███", True),
-           ("██████    ██  ██    █ ████    ████ █      ██  ", True),
-           ("██████    ██  ██    █  ▀██    ██▀  █    ███▀ █", True),
-           ("", True),
-           ("CTRL+C     F10        F8        F9       F12  ", True)]
+    box = [
+        ("----", False),
+        ("", True),
+        ("░" * box_width, True),
+        ("", True),
+        ("--:--", True),
+        ("", True),
+        ("██████    ██  ██    █  ▄██    ██▄  █    █ ▄███", True),
+        ("██████    ██  ██    █ ████    ████ █      ██  ", True),
+        ("██████    ██  ██    █  ▀██    ██▀  █    ███▀ █", True),
+        ("", True),
+        ("CTRL+C     F10        F8        F9       F12  ", True),
+    ]
 
-    play = ["██▄▄  ",
-            "██████",
-            "██▀▀  "]
+    play = ["██▄▄  ", "██████", "██▀▀  "]
 
-    pause = ["██  ██",
-             "██  ██",
-             "██  ██"]
+    pause = ["██  ██", "██  ██", "██  ██"]
 
 
 @dataclass
 class Files:
-    m_file = ""
+    """
+    File data.
+    """
+    music_file = ""
 
 
 # --- Signal handling functions
+# pylint: disable=unused-argument
 def exit_handler(signum, frame):
     """
     Executes whenever the signal SIGINT is received.
@@ -179,6 +195,7 @@ def exit_handler(signum, frame):
     os._exit(0)
 
 
+# pylint: disable=unused-argument
 def resize_handler(signum, frame):
     """
     Executes whenever the signal SIGINT is received.
@@ -188,10 +205,9 @@ def resize_handler(signum, frame):
         signum (int): The signal number.
         frame (frame): The frame.
     """
-    global UI
 
-    UI.box[2] = (update_bar(), True)
-    UI.box[4] = (update_bar_txt(), True)
+    UserInterface.box[2] = (update_bar(), True)
+    UserInterface.box[4] = (update_bar_txt(), True)
     redraw()
 
 
@@ -202,15 +218,12 @@ def swap_symbol(symbols):
     Args:
         symbol (list<str>): The new symbol.
     """
-    global UI
 
-    for i, symbol in enumerate(symbols):
+    for symbol_index, symbol in enumerate(symbols):
 
-        line = UI.box[UI.playIdx+i][0][0:10] \
-            + symbol \
-            + UI.box[UI.playIdx+i][0][16:]
+        line = UserInterface.box[UserInterface.play_index + symbol_index][0][0:10] + symbol + UserInterface.box[UserInterface.play_index + symbol_index][0][16:]
 
-        UI.box[UI.playIdx+i] = (line, True)
+        UserInterface.box[UserInterface.play_index + symbol_index] = (line, True)
 
 
 def redraw():
@@ -235,11 +248,11 @@ def redraw():
         term_size = os.get_terminal_size()
         term_width = term_size.columns
         term_height = term_size.lines
-        string = "\n" * (int(term_height/2) - int(len(lines)/2))
+        string = "\n" * (int(term_height / 2) - int(len(lines) / 2))
         dots = "..."
 
         # Limit according to terminal height
-        lines = lines[:term_height-1]
+        lines = lines[: term_height - 1]
 
         # Create the body
         for tupl in lines:
@@ -248,7 +261,7 @@ def redraw():
 
             # Shorten the line if it is too long
             if line_len > min(box_width, term_width):
-                line = line[:min(box_width, term_width) - len(dots)] + dots
+                line = line[: min(box_width, term_width) - len(dots)] + dots
 
             if tupl[1]:
                 # Center the line
@@ -262,17 +275,17 @@ def redraw():
             formatted_line = formatted_line.center(term_width)
             string += formatted_line
 
-        if UI.no_clear:
-            string += "\n" * (int(term_height/2) - int(len(lines)/2) - 2)
+        if UserInterface.no_clear:
+            string += "\n" * (int(term_height / 2) - int(len(lines) / 2) - 2)
 
         return string
 
-    if not UI.no_clear:
+    if not UserInterface.no_clear:
         reset_terminal()
 
     cursor.hide()
 
-    print(interface(tuple(UI.box), UI.box_width), flush=True)
+    print(interface(tuple(UserInterface.box), UserInterface.box_width), flush=True)
 
 
 def update_bar():
@@ -299,17 +312,17 @@ def update_bar():
         return bar_txt
 
     # Load the audio file to mutagen
-    audio = mutagen.File(Files.m_file)
+    audio = mutagen.File(Files.music_file)
 
     # Obtain current and total times
-    curr_time = UI.file_pos / 1000
+    curr_time = UserInterface.file_pos / 1000
     total_time = max(int(audio.info.length), 1)
 
     # Calculate the percentage of the song that is played
     percentage = curr_time / total_time
 
     # Get the progress bar
-    progress_bar = bar_parser(percentage, UI.box_width)
+    progress_bar = bar_parser(percentage, UserInterface.box_width)
     return progress_bar
 
 
@@ -337,8 +350,8 @@ def update_bar_txt():
         total_mins, total_secs = divmod(total_secs, 60)
 
         # Format the time
-        current_time = "{:02d}:{:02d}".format(current_mins, current_secs)
-        total_time = "{:02d}:{:02d}".format(total_mins, total_secs)
+        current_time = f"{current_mins:02d}:{current_secs:02d}"
+        total_time = f"{total_mins:02d}:{total_secs:02d}"
 
         # Format the final info string
         half_width = int(max_width / 2)
@@ -346,14 +359,14 @@ def update_bar_txt():
         return line
 
     # Load the audio file to mutagen
-    audio = mutagen.File(Files.m_file)
+    audio = mutagen.File(Files.music_file)
 
     # Obtain current and total times
-    curr_time = int(UI.file_pos / 1000)
+    curr_time = int(UserInterface.file_pos / 1000)
     total_time = int(audio.info.length)
 
     # Call song_info_parser to get the bar text
-    song_info = song_info_parser(curr_time, total_time, UI.box_width)
+    song_info = song_info_parser(curr_time, total_time, UserInterface.box_width)
     return song_info
 
 
@@ -362,24 +375,24 @@ def poll_interface(poll_interval):
     Updates the progress bar and the song time info every interval.
     The thread is blocked updating the bar until the song is finished.
     """
-    global UI
 
     # Clear at the beginning if the redraws are set
     # to not clear each time. Else this is not needed.
-    if UI.no_clear:
+    if UserInterface.no_clear:
         clear_screen()
 
     while True:
 
         # Update bar and bar text and redraw
-        UI.box[2] = (update_bar(), True)
-        UI.box[4] = (update_bar_txt(), True)
+        UserInterface.box[2] = (update_bar(), True)
+        UserInterface.box[4] = (update_bar_txt(), True)
         redraw()
 
         # Sleep until the screen has to be updated again
         time.sleep(poll_interval)
         if pygame.mixer.music.get_busy():
-            UI.file_pos += poll_interval * 1000
+            UserInterface.file_pos += poll_interval * 1000
+
 
 # --- Filename and string functions
 
@@ -408,7 +421,7 @@ def strip_filename_from_path(path):
         str: The path without the filename.
     """
     parent = Path(path).parent
-    if not str(parent) or str(parent) == '.':
+    if not str(parent) or str(parent) == ".":
         return os.getcwd()
     return str(parent)
 
@@ -431,10 +444,7 @@ def random_file(path, allow_same=True):
     ext = (".mp3", ".wav", ".ogg", ".flac", ".opus")
     files = os.listdir(stripped_path)
 
-    music_files = [f
-                   for f
-                   in files
-                   if f.endswith(ext) and f != old_filename]
+    music_files = [file for file in files if file.endswith(ext) and file != old_filename]
 
     # Only add the old filename back if it was a valid music file and we allow it
     if allow_same and old_filename.endswith(ext):
@@ -442,12 +452,12 @@ def random_file(path, allow_same=True):
 
     try:
         # Get a random file from the directory (dont repeat the original file)
-        r_file = random.choice(music_files)
+        random_file = random.choice(music_files)
     except (IndexError, ValueError) as esc:
         raise pygame.error(f"No music files found in the directory.\n{esc}")
 
     # Return the path to the new random file
-    return str(Path(stripped_path) / r_file)
+    return str(Path(stripped_path) / random_file)
 
 
 # --- Keyboard handling functions
@@ -457,7 +467,6 @@ def keyboard_listener():
     Keeps that thread blocked until a key is pressed and then
     the key is captured and handled.
     """
-    global UI, Files
 
     press_or_release = defaultdict(lambda: 0)
 
@@ -465,7 +474,7 @@ def keyboard_listener():
         for event in events:
 
             # (Clear user input)
-            print(" "*16 + "\r", end="")
+            print(" " * 16 + "\r", end="")
 
             # (Check only for key presses)
             press_or_release[event.key] += 1
@@ -476,54 +485,54 @@ def keyboard_listener():
             if event.key == Bindings.pause:
                 if pygame.mixer.music.get_busy():
                     pygame.mixer.music.pause()
-                    swap_symbol(UI.play)
+                    swap_symbol(UserInterface.play)
                     redraw()
                 else:
                     pygame.mixer.music.unpause()
-                    swap_symbol(UI.pause)
+                    swap_symbol(UserInterface.pause)
                     redraw()
 
-            elif event.key == Bindings.seekBwd:
-                song_length = 1000 * mutagen.File(Files.m_file).info.length
+            elif event.key == Bindings.seek_bwd:
+                song_length = 1000 * mutagen.File(Files.music_file).info.length
                 skip_amount = 0.025 * song_length
 
-                next_pos = UI.file_pos - skip_amount
+                next_pos = UserInterface.file_pos - skip_amount
                 start_pos = 0
-                UI.file_pos = max(next_pos, start_pos)
-                pygame.mixer.music.play(start=UI.file_pos/1000)
+                UserInterface.file_pos = max(next_pos, start_pos)
+                pygame.mixer.music.play(start=UserInterface.file_pos / 1000)
 
-                UI.box[2] = (update_bar(), True)
-                UI.box[4] = (update_bar_txt(), True)
-                swap_symbol(UI.pause)
+                UserInterface.box[2] = (update_bar(), True)
+                UserInterface.box[4] = (update_bar_txt(), True)
+                swap_symbol(UserInterface.pause)
                 redraw()
 
-            elif event.key == Bindings.seekFwd:
-                song_length = 1000 * mutagen.File(Files.m_file).info.length
+            elif event.key == Bindings.seek_fwd:
+                song_length = 1000 * mutagen.File(Files.music_file).info.length
                 skip_amount = 0.025 * song_length
 
-                next_pos = UI.file_pos + skip_amount
+                next_pos = UserInterface.file_pos + skip_amount
                 end_pos = song_length
-                UI.file_pos = min(next_pos, end_pos)
-                pygame.mixer.music.play(start=UI.file_pos/1000)
+                UserInterface.file_pos = min(next_pos, end_pos)
+                pygame.mixer.music.play(start=UserInterface.file_pos / 1000)
 
-                UI.box[2] = (update_bar(), True)
-                UI.box[4] = (update_bar_txt(), True)
-                swap_symbol(UI.pause)
+                UserInterface.box[2] = (update_bar(), True)
+                UserInterface.box[4] = (update_bar_txt(), True)
+                swap_symbol(UserInterface.pause)
                 redraw()
 
             elif event.key == Bindings.next:
                 try:
                     # Get a random file, load it and play it
-                    Files.m_file = random_file(Files.m_file)
-                    pygame.mixer.music.load(Files.m_file)
+                    Files.music_file = random_file(Files.music_file)
+                    pygame.mixer.music.load(Files.music_file)
                     pygame.mixer.music.play()
 
                     # Update the song title, info and bar
-                    UI.file_pos = 0
-                    UI.box[0] = (strip_path_from_filename(Files.m_file), False)
-                    UI.box[2] = (update_bar(), True)
-                    UI.box[4] = (update_bar_txt(), True)
-                    swap_symbol(UI.pause)
+                    UserInterface.file_pos = 0
+                    UserInterface.box[0] = (strip_path_from_filename(Files.music_file), False)
+                    UserInterface.box[2] = (update_bar(), True)
+                    UserInterface.box[4] = (update_bar_txt(), True)
+                    swap_symbol(UserInterface.pause)
                     redraw()
 
                 except pygame.error:
@@ -533,10 +542,10 @@ def keyboard_listener():
                         pygame.mixer.music.unpause()
 
                         # Update the bar text and bar
-                        UI.file_pos = 0
-                        UI.box[2] = (update_bar(), True)
-                        UI.box[4] = (update_bar_txt(), True)
-                        swap_symbol(UI.pause)
+                        UserInterface.file_pos = 0
+                        UserInterface.box[2] = (update_bar(), True)
+                        UserInterface.box[4] = (update_bar_txt(), True)
+                        swap_symbol(UserInterface.pause)
                         redraw()
 
 
@@ -549,9 +558,8 @@ def infinite_queue(event_type):
     it unblocks and plays the next song so run all the threads
     you would like to run before calling this function on the main thread.
     Args:
-        event (pygame.event): The event that is captured. Usually MUSIC_END
+        event (pygame.event): The event that is captured. Usually music_end.
     """
-    global UI, Files
 
     while True:
 
@@ -561,16 +569,16 @@ def infinite_queue(event_type):
 
             try:
                 # Get a random file, load it and play it
-                Files.m_file = random_file(Files.m_file)
-                pygame.mixer.music.load(Files.m_file)
+                Files.music_file = random_file(Files.music_file)
+                pygame.mixer.music.load(Files.music_file)
                 pygame.mixer.music.play()
 
                 # Update title, bar and bar text
-                UI.file_pos = 0
-                UI.box[0] = (strip_path_from_filename(Files.m_file), False)
-                UI.box[2] = (update_bar(), True)
-                UI.box[4] = (update_bar_txt(), True)
-                swap_symbol(UI.pause)
+                UserInterface.file_pos = 0
+                UserInterface.box[0] = (strip_path_from_filename(Files.music_file), False)
+                UserInterface.box[2] = (update_bar(), True)
+                UserInterface.box[4] = (update_bar_txt(), True)
+                swap_symbol(UserInterface.pause)
                 redraw()
 
             except pygame.error:
@@ -604,21 +612,21 @@ def args(positional=None):
 
     # Store positional arguments
     tail = len(positional)
-    for i, pos_arg in enumerate(positional):
+    for pos_arg_idx, pos_arg in enumerate(positional):
         with contextlib.suppress(IndexError):
-            if str(sys.argv[i+1]).startswith("-"):
-                tail = i
+            if str(sys.argv[pos_arg_idx + 1]).startswith("-"):
+                tail = pos_arg_idx
                 break
-            value = sys.argv[i+1]
+            value = sys.argv[pos_arg_idx + 1]
             args_dict[pos_arg] = value
 
     # Store flags
-    for i in range(tail+1, len(sys.argv)):
+    for pos_arg_idx in range(tail + 1, len(sys.argv)):
         try:
-            value = str(sys.argv[i]).split("=")[1]
+            value = str(sys.argv[pos_arg_idx]).split("=")[1]
         except IndexError:
             value = True
-        args_dict[str(sys.argv[i]).split("=", maxsplit=1)[0]] = value
+        args_dict[str(sys.argv[pos_arg_idx]).split("=", maxsplit=1)[0]] = value
 
     return args_dict
 
@@ -628,8 +636,7 @@ def main():
     """
     Main function.
     """
-    global UI, Files
-    update_interval = 1/2         # Default value: 2 fps
+    update_interval = 1 / 2  # Default value: 2 fps
     enable_infinite_queue = True  # Default value: True
 
     ## Read input arguments ##
@@ -638,18 +645,18 @@ def main():
     # No song
     if ("path" not in arg) or arg["path"].strip() in ["--help", "-h"]:
 
-        if ('--help' in arg or '-h' in arg):
+        if "--help" in arg or "-h" in arg:
             print(HELP_MSG)
             sys.exit(0)
 
-        if ('--version' in arg or '-v' in arg):
+        if "--version" in arg or "-v" in arg:
             print(VERSION)
             sys.exit(0)
 
         arg["path"] = get_music_directory()
 
     try:
-        Files.m_file = arg["path"]
+        Files.music_file = arg["path"]
     except ValueError:
         print(HELP_MSG)
         sys.exit(1)
@@ -673,19 +680,19 @@ def main():
     # Screen clearing between updates disabled
     if "--no-clear" in arg:
         try:
-            UI.no_clear = bool(arg["--no-clear"])
+            UserInterface.no_clear = bool(arg["--no-clear"])
         except ValueError:
             print(HELP_MSG)
             sys.exit(1)
 
     # If the path is a folder, get a random file from it
-    if os.path.isdir(Files.m_file):
+    if os.path.isdir(Files.music_file):
         try:
             # Ensure path has trailing separator
-            path_obj = Path(Files.m_file)
+            path_obj = Path(Files.music_file)
             # Add a dummy filename to make random_file work correctly
-            Files.m_file = str(path_obj / "dummy.mp3")
-            Files.m_file = random_file(Files.m_file, allow_same=False)
+            Files.music_file = str(path_obj / "dummy.mp3")
+            Files.music_file = random_file(Files.music_file, allow_same=False)
         except pygame.error:
             print(f"Error: No music files found in '{path_obj}'.")
             sys.exit(1)
@@ -693,7 +700,7 @@ def main():
     # Set up signal handlers
     signal.signal(signal.SIGINT, exit_handler)
     # SIGWINCH is not available on Windows
-    if hasattr(signal, 'SIGWINCH'):
+    if hasattr(signal, "SIGWINCH"):
         signal.signal(signal.SIGWINCH, resize_handler)
 
     # Initialize pygame mixer
@@ -701,26 +708,26 @@ def main():
 
     try:
         # Load song and play it
-        pygame.mixer.music.load(Files.m_file)
-        UI.box[0] = (strip_path_from_filename(Files.m_file), False)
+        pygame.mixer.music.load(Files.music_file)
+        UserInterface.box[0] = (strip_path_from_filename(Files.music_file), False)
         pygame.mixer.music.play()
 
         # Send an event when the song ends
-        MUSIC_END = pygame.USEREVENT+1
-        pygame.mixer.music.set_endevent(MUSIC_END)
+        music_end = pygame.USEREVENT + 1
+        pygame.mixer.music.set_endevent(music_end)
 
     except pygame.error:
-        print(f"Error: Could not load file or directory '{Files.m_file}'.")
+        print(f"Error: Could not load file or directory '{Files.music_file}'.")
         sys.exit(1)
 
     # THRD1 - Initialize the keyboard listener
-    th = threading.Thread(target=keyboard_listener)
-    th.daemon = True
-    th.start()
+    keyboard_thread = threading.Thread(target=keyboard_listener)
+    keyboard_thread.daemon = True
+    keyboard_thread.start()
 
     # THRD2 - Initialize the infinite queue
     if enable_infinite_queue:
-        th2 = threading.Thread(target=infinite_queue, args=(MUSIC_END,))
+        th2 = threading.Thread(target=infinite_queue, args=(music_end,))
         th2.daemon = True
         th2.start()
 
